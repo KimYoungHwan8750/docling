@@ -15,10 +15,10 @@ API_KEY = os.getenv("OPEN_ROUTER_API_KEY")
 # -----------------------------------------------------
 
 OPENROUTER_API_KEY = API_KEY
-MODEL_NAME = "qwen/qwen3-vl-30b-a3b-instruct" 
+MODEL_NAME = "qwen/qwen3-vl-235b-a22b-instruct" 
 
 # ✅ 입력 파일 (PDF)
-pdf_path = "intp_electronic.pdf" 
+pdf_path = "eng_payment_method.pdf" 
 # ✅ 임시로 생성할 이미지 파일명 (자동 생성)
 temp_image_path = "temp_page_1.png"
 
