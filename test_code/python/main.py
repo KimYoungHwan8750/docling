@@ -1,4 +1,4 @@
-from qwen_client import QwenClient
+from module import QwenClient
 
 # 클라이언트 초기화
 qwen = QwenClient(ip="192.168.0.99", port="8000")
