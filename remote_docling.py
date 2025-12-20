@@ -2,8 +2,9 @@ import logging
 import os
 from pathlib import Path
 
+from docling_core.types.doc.document import TableItem
 import requests
-from docling_core.types.doc import PictureItem
+from docling_core.types.doc import PictureItem, TextItem
 from dotenv import load_dotenv
 
 from docling.datamodel.base_models import InputFormat
@@ -26,9 +27,9 @@ def vllm_local_options(model: str):
         params=dict(
             model=model,
             seed=42,
-            max_completion_tokens=200,
+            max_completion_tokens=250,
         ),
-        prompt="이 이미지를 설명하고 한국의 기업 삼성에 대해 설명해",
+        prompt="이미지에 대한 간단한 설명, 차트나 도표가 포함될 경우 누락되는 정보 없도록 마크다운으로 변환",
         timeout=90,
     )
     return options
@@ -36,10 +37,13 @@ def vllm_local_options(model: str):
 def main():
     logging.basicConfig(level=logging.INFO)
 
-    input_doc_path = "doughnut.pdf"
+    input_doc_path = "/home/kyh/docling/intp_electronic.pdf"
 
     pipeline_options = PdfPipelineOptions(
-        enable_remote_services=True  # <-- this is required!
+        do_ocr=True,
+        enable_remote_services=True,  # <-- this is required!
+        generate_picture_images=True,
+        images_scale=2.0
     )
     pipeline_options.do_picture_description = True
     pipeline_options.picture_description_options = vllm_local_options(model="My_Model")
@@ -57,9 +61,15 @@ def main():
         if isinstance(element, PictureItem):
             print(
                 f"Picture {element.self_ref}\n"
-                f"Caption: {element.caption_text(doc=result.document)}\n"
-                f"Annotations: {element.annotations}"
+                f"Caption: {element.captions}\n"
             )
+            for annotation in element.annotations:
+                print(f"Annotation: {annotation}")
+            print(f"Context: {element.export_to_markdown(doc=result.document)}")
+        if isinstance(element, TextItem):
+            print(f"Text: {element.text}")
+        if isinstance(element, TableItem):
+            print(f"Table: {element.data}")
 
 
 if __name__ == "__main__":
