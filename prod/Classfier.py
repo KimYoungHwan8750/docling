@@ -18,7 +18,7 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions, PictureDescri
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.models.base_model import BaseEnrichmentModel
 from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
-from docling_core.types.doc.document import DescriptionAnnotation
+from docling_core.types.doc.document import DescriptionAnnotation, TableItem
 
 
 # 이미지를 만났을 때 실행할 파이프 라인
@@ -74,9 +74,6 @@ class PictureClassifierEnrichmentModel(BaseEnrichmentModel):
                     ],
                 )
             )
-
-            
-
             yield element
 
 
@@ -112,10 +109,17 @@ def main():
             )
         }
     )
-    result = doc_converter.convert("/home/kyh/docling/intp_electronic.pdf")
+    result = doc_converter.convert("/home/kyh/docling/산학연_결과보고서.docx")
 
     for element, _level in result.document.iterate_items():
+        if isinstance(element, TableItem):
+            print(f"Table: {element.export_to_markdown(doc=result.document)}")
         if isinstance(element, PictureItem):
+            print(
+                f"Picture {element.self_ref}\n"
+                f"Caption: {element.caption_text(doc=result.document)}\n"
+                f"Annotations: {element.annotations}"
+            )
             for annotation in element.annotations:
                 if isinstance(annotation, DescriptionAnnotation):
                     print(f"Description: {annotation}")
