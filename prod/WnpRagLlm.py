@@ -9,7 +9,25 @@ VLLM_URL = "http://localhost:8000/v1/chat/completions"
 def generate_answer(query):
     print(f"질문 분석 중: {query}")
     
-    dense_vec, _ = WnpEmbedModel.embed([query])
+    dense_vec, sparse_vec = WnpEmbedModel.embed([query])
+    threshold = 0.1
+    max_top_k = 30
+
+    filtered_sparse = {t: w for t, w in sparse_vec.items() if w >= threshold}
+
+    if len(filtered_sparse) > max_top_k:
+        top_sparse = dict(sorted(filtered_sparse.items(), key=lambda x: x[1], reverse=True)[:max_top_k])
+    else:
+        top_sparse = filtered_sparse
+
+    sparse_should_clauses = []
+    for token, weight in top_sparse.items():
+        sparse_should_clauses.append({
+            "rank_feature": {
+                "field": f"content_sparse.{token}",      # BGE-M3 토큰 ID
+                "boost": float(weight)    # 가중치를 부스트로 사용
+            }
+        })
     
     search_query = {
         "size": 10,
@@ -17,7 +35,8 @@ def generate_answer(query):
             "hybrid": {
                 "queries": [
                     {"match": {"content": query}},
-                    {"knn": {"content_dense": {"vector": dense_vec, "k": 10}}}
+                    {"knn": {"content_dense": {"vector": dense_vec, "k": 10}}},
+                    {"bool": {"should": sparse_should_clauses}}
                 ]
             }
         }
@@ -26,7 +45,7 @@ def generate_answer(query):
     search_res = WnpOpensearch.get_client().search(
         index="rag_data",
         body=search_query,
-        params={"search_pipeline": "hybrid_search_pipeline2"}
+        params={"search_pipeline": "hybrid_search_pipeline"}
     )
     
     hits = search_res['hits']['hits']
