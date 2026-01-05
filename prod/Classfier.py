@@ -25,10 +25,12 @@ from docling_core.types.doc.document import DescriptionAnnotation, TableItem
 class PictureClassifierPipelineOptions(PdfPipelineOptions):
     do_picture_classifer: bool = True
     do_ocr: bool = True
-    generate_picture_images: bool = True
+    generate_picture_images: bool = False # 이미지 첨부 여부
     enable_remote_services: bool = True
     images_scale: float = 2.0
+    do_table_structure: bool = True
     do_picture_description: bool = True
+    do_table_structure: bool = True
     picture_description_options: PictureDescriptionApiOptions = PictureDescriptionApiOptions(
         url="http://192.168.0.99:8000/v1/chat/completions",
         params=dict(
@@ -70,7 +72,7 @@ class PictureClassifierEnrichmentModel(BaseEnrichmentModel):
                 PictureClassificationData(
                     provenance="example_classifier-0.0.1",
                     predicted_classes=[
-                        PictureClassificationClass(class_name="dummy", confidence=0.42)
+                        # PictureClassificationClass(class_name="dummy", confidence=0.42)
                     ],
                 )
             )
@@ -109,20 +111,18 @@ def main():
             )
         }
     )
-    result = doc_converter.convert("/home/kyh/docling/산학연_결과보고서.docx")
+    result = doc_converter.convert("/home/kyh/docling/caption_test.pdf")
 
     for element, _level in result.document.iterate_items():
-        if isinstance(element, TableItem):
-            print(f"Table: {element.export_to_markdown(doc=result.document)}")
         if isinstance(element, PictureItem):
             print(
                 f"Picture {element.self_ref}\n"
                 f"Caption: {element.caption_text(doc=result.document)}\n"
                 f"Annotations: {element.annotations}"
             )
-            for annotation in element.annotations:
-                if isinstance(annotation, DescriptionAnnotation):
-                    print(f"Description: {annotation}")
+            # for annotation in element.annotations:
+            #     if isinstance(annotation, DescriptionAnnotation):
+            #         print(f"Description: {annotation}")
 
 if __name__ == "__main__":
     main()
