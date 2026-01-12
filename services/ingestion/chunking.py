@@ -1,4 +1,3 @@
-from FlagEmbedding import BGEM3FlagModel
 from docling_core.transforms.chunker.hierarchical_chunker import (
     ChunkingDocSerializer,
     ChunkingSerializerProvider,
@@ -7,21 +6,17 @@ from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
 from docling_core.types.doc.document import DocItem
 
-from embed import WnpEmbedModel
-
 class MDTableSerializerProvider(ChunkingSerializerProvider):
     def get_serializer(self, doc):
         return ChunkingDocSerializer(
             doc=doc,
-            table_serializer=MarkdownTableSerializer(),  # configuring a different table serializer
+            table_serializer=MarkdownTableSerializer(),
         )
 
-model = WnpEmbedModel.getModel()
-
-def get_chunker():
+def get_chunker(embed_model):
     chunker = HybridChunker(
         max_tokens=1024,
-        tokenizer = model.tokenizer,
+        tokenizer = embed_model.tokenizer,
         serializer_provider=MDTableSerializerProvider()
     )
     return chunker

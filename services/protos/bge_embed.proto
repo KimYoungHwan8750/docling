@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+service BgeEmbed {
+    rpc Embed(EmbedRequest) returns (EmbedResponse);
+}
+
+message EmbedRequest {
+    repeated string texts = 1;
+}
+
+message EmbedResponse {
+    repeated VectorData vectors = 1;
+}
+
+message VectorData {
+    repeated float dense = 1;
+    map<string, float> sparse = 2;
+}
+

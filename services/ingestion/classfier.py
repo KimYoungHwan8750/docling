@@ -1,14 +1,11 @@
 
 import logging
 from collections.abc import Iterable
-from pathlib import Path
-import time
 from typing import Any
 
 from docling_core.types.doc import (
     DoclingDocument,
     NodeItem,
-    PictureClassificationClass,
     PictureClassificationData,
     PictureItem,
 )
@@ -18,7 +15,6 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions, PictureDescri
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.models.base_model import BaseEnrichmentModel
 from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
-from docling_core.types.doc.document import DescriptionAnnotation, TableItem
 
 
 # 이미지를 만났을 때 실행할 파이프 라인
@@ -77,7 +73,6 @@ class PictureClassifierEnrichmentModel(BaseEnrichmentModel):
                 )
             )
             yield element
-
 
 class PictureClassifierPipeline(StandardPdfPipeline):
     def __init__(self, pipeline_options: PictureClassifierPipelineOptions):

@@ -1,8 +1,8 @@
 import requests
 import json
-from WnpOpensearch import WnpOpensearch
+from wnp_opensearch import WnpOpensearch
 from embed import WnpEmbedModel
-from WnpReranker import WnpReranker
+from wnp_reranker import WnpReranker
 
 VLLM_URL = "http://localhost:8000/v1/chat/completions"
 
@@ -34,7 +34,7 @@ def generate_answer(query):
         "query": {
             "hybrid": {
                 "queries": [
-                    {"match": {"content": query}},
+                    # {"match": {"content": query}},
                     {"knn": {"content_dense": {"vector": dense_vec, "k": 10}}},
                     {"bool": {"should": sparse_should_clauses}}
                 ]
@@ -45,7 +45,7 @@ def generate_answer(query):
     search_res = WnpOpensearch.get_client().search(
         index="rag_data",
         body=search_query,
-        params={"search_pipeline": "hybrid_search_pipeline"}
+        params={"search_pipeline": "hybrid_search_pipeline2"}
     )
     
     hits = search_res['hits']['hits']
@@ -88,13 +88,36 @@ def generate_answer(query):
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.1,
-        "max_tokens": 1024
+        "max_tokens": 2048,
+        "stream": True
     }
 
-    response = requests.post(VLLM_URL, json=payload)
-    return response.json()['choices'][0]['message']['content']
+    response = requests.post(VLLM_URL, json=payload, stream=True)
+    
+    print("\n✨ Qwen의 답변: ", end="", flush=True)
+    full_answer = ""
+
+    # 3. 데이터가 들어오는 대로 실시간 처리
+    for line in response.iter_lines():
+        if line:
+            # "data: " 접두사 제거 후 JSON 파싱
+            decoded_line = line.decode('utf-8')
+            if decoded_line.startswith("data: "):
+                data_str = decoded_line[6:]
+                
+                # 스트림 끝 표시인 [DONE] 체크
+                if data_str.strip() == "[DONE]":
+                    break
+                
+                data_json = json.loads(data_str)
+                # content 조각(delta) 추출
+                delta = data_json['choices'][0]['delta'].get('content', "")
+                
+                print(delta, end="", flush=True) # 화면에 즉시 출력
+                full_answer += delta
+
+    return full_answer
 
 if __name__ == "__main__":
-    query = "20대가 가장 많이 하는 활동이 뭔가?"
+    query = "what it the password for snack24"
     answer = generate_answer(query)
-    print(f"\n✨ Qwen의 답변:\n{answer}")

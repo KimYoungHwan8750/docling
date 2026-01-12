@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+service BgeRerank {
+    rpc Rerank(RerankRequest) returns (RerankResponse);
+}
+
+message RerankRequest {
+    repeated string query = 1;
+    repeated string documents = 2;
+}
+
+message RerankResponse {
+    repeated float scores = 1;
+}

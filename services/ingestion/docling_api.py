@@ -1,19 +1,30 @@
+from contextlib import asynccontextmanager
 import logging
 
 from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling_core.types.doc.document import PictureItem, TableItem, TextItem
-from Classfier import PictureClassifierPipeline, PictureClassifierPipelineOptions
-from docling.chunking import HybridChunker
+from classfier import PictureClassifierPipeline, PictureClassifierPipelineOptions
 from hierarchical.postprocessor import ResultPostprocessor
-from FlagEmbedding import BGEM3FlagModel
 from chunking import get_chunker, get_pages
 from embed import WnpEmbedModel
-from WnpOpensearch import WnpOpensearch
+from wnp_opensearch import WnpOpensearch
+from fastapi import FastAPI
+from httpx import AsyncClient
 
-def main():
+app_service = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the ML model
+    app_service['embed_model'] = WnpEmbedModel()
+    app_service['chunker'] = get_chunker(app_service['embed_model'])
+    
+    yield
+    # Clean up the ML models and release the resources
+    app_service.clear()
+
+async def main():
     logging.basicConfig(level=logging.INFO)
-
     pipeline_options = PictureClassifierPipelineOptions()
     pipeline_options.images_scale = 2.0
     pipeline_options.generate_picture_images = True
@@ -22,6 +33,13 @@ def main():
     pipeline_options.do_ocr = True
     pipeline_options.generate_table_images = True
     doc_converter = DocumentConverter(
+        allowed_formats=[
+            InputFormat.PDF,
+            InputFormat.DOCX,
+            InputFormat.HTML,
+            InputFormat.MD,
+            InputFormat.ASCIIDOC,
+        ],
         format_options={
             InputFormat.PDF: PdfFormatOption(
                 pipeline_cls=PictureClassifierPipeline,
@@ -29,12 +47,25 @@ def main():
             )
         }
     )
+    # TXT 파일을 MD로 처리
+    file_path = "/home/kyh/docling/test.txt"
+    
+    # 확장자만 .md로 변경해서 임시 파일 생성
+    if file_path.endswith('.txt'):
+        import shutil
+        md_file = file_path.replace('.txt', '.md')
+        shutil.copy(file_path, md_file)
+        print(f"📝 TXT -> MD 변환: {file_path} → {md_file}")
+        file_path = md_file
+    
     result = doc_converter.convert(
-        "/home/kyh/docling/헤딩에따른구체적내용.pdf",
+        file_path,
         # page_range=(4, 5)
     )
 
-    ResultPostprocessor(result).process()
+    # ResultPostprocessor는 PDF 전용 - MD/TXT는 건너뛰기
+    if file_path.endswith('.pdf'):
+        ResultPostprocessor(result).process()
     chunker = get_chunker()
     chunk_iter = chunker.chunk(dl_doc=result.document)
 
@@ -57,6 +88,9 @@ def main():
             }
         }
         WnpOpensearch.put_rag_data(data)
+        async with AsyncClient() as client:
+            response = await client.post("http://localhost:8000/ingestion/embed", json=data)
+            print(response.json())
         # if hasattr(chunk, 'headings')
         # print(f"Chunk {i}: {content}")    
     # for i, (item, level) in enumerate(result.document.iterate_items()):
