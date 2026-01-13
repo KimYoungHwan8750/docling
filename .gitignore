@@ -9,3 +9,8 @@ WNP_비밀번호.pdf
 *.pdf
 *.png
 *.docx
+data/
+*.bin
+*.pt
+*.onnx
+*.onnx_data

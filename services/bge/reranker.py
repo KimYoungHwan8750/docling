@@ -1,6 +1,6 @@
 from FlagEmbedding import FlagReranker
-from ..protos import bge_rerank_pb2
-from ..protos import bge_rerank_pb2_grpc
+from protos import bge_rerank_pb2
+from protos import bge_rerank_pb2_grpc
 import grpc
 from concurrent import futures
 
@@ -26,3 +26,6 @@ def serve():
     server.add_insecure_port('[::]:50056')
     server.start()
     server.wait_for_termination()
+
+if __name__ == "__main__":
+    serve()

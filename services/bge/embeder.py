@@ -1,7 +1,7 @@
 import time
 from FlagEmbedding import BGEM3FlagModel
-from ..protos import bge_embed_pb2
-from ..protos import bge_embed_pb2_grpc
+from protos import bge_embed_pb2
+from protos import bge_embed_pb2_grpc
 import grpc
 from concurrent import futures
 

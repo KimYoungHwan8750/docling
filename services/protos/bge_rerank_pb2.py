@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n services/protos/bge_rerank.proto\"1\n\rRerankRequest\x12\r\n\x05query\x18\x01 \x03(\t\x12\x11\n\tdocuments\x18\x02 \x03(\t\" \n\x0eRerankResponse\x12\x0e\n\x06scores\x18\x01 \x03(\x02\x32\x36\n\tBgeRerank\x12)\n\x06Rerank\x12\x0e.RerankRequest\x1a\x0f.RerankResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n services/protos/bge_rerank.proto\"1\n\rRerankRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x11\n\tdocuments\x18\x02 \x03(\t\" \n\x0eRerankResponse\x12\x0e\n\x06scores\x18\x01 \x03(\x02\x32\x36\n\tBgeRerank\x12)\n\x06Rerank\x12\x0e.RerankRequest\x1a\x0f.RerankResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)

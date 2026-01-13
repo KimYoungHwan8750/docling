@@ -6,8 +6,8 @@ from .classfier import PictureClassifierPipeline, PictureClassifierPipelineOptio
 from hierarchical.postprocessor import ResultPostprocessor
 from .chunking import get_chunker, get_pages
 import grpc
-from ..protos import bge_embed_pb2_grpc
-from ..protos import bge_embed_pb2
+from ..protos import bge_embed_pb2_grpc, bge_rerank_pb2_grpc
+from ..protos import bge_embed_pb2, bge_rerank_pb2
 # from ..retrieval.wnp_opensearch import WnpOpensearch
 
 
@@ -33,10 +33,27 @@ def embed_via_grpc(sentences: list[str], client=None) -> tuple[list[float], dict
     return dense, sparse
 
 def test_code():
-    client = get_embed_client()
-    dense, sparse = embed_via_grpc(["Hello, world!"], client)
-    print(dense)
-    print(sparse)
+    embed_client = get_embed_client()
+    dense, sparse = embed_via_grpc(["Hello, world!"], embed_client)
+    print("Dense:", dense)
+    print("Sparse:", sparse)
+
+    rerank_client = get_rerank_client()
+    rerank_scores = rerank_via_grpc("반갑다", ["반갑지 않다."], rerank_client)
+    print("Rerank scores:", rerank_scores)
+
+
+def get_rerank_client(server_address='localhost:50056'):
+    channel = grpc.insecure_channel(server_address)
+    return bge_rerank_pb2_grpc.BgeRerankStub(channel)
+
+def rerank_via_grpc(query: str, documents: list[str], client=None) -> list[float]:
+    if client is None:
+        client = get_rerank_client()
+    
+    request = bge_rerank_pb2.RerankRequest(query=query, documents=documents)
+    response = client.Rerank(request)
+    return response.scores
 
 
 # def main():

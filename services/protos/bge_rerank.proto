@@ -5,7 +5,7 @@ service BgeRerank {
 }
 
 message RerankRequest {
-    repeated string query = 1;
+    string query = 1;
     repeated string documents = 2;
 }
 

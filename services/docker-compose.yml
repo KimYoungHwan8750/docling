@@ -1,0 +1,13 @@
+services:
+  embedding-server:
+    build:
+      context: .
+      dockerfile: ./bge/Dockerfile-embed
+    ports:
+    - "50055:50055"
+  rerank-server:
+    build:
+      context: .
+      dockerfile: ./bge/Dockerfile-rerank
+    ports:
+    - "50056:50056"
