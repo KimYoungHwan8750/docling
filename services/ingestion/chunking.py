@@ -5,6 +5,7 @@ from docling_core.transforms.chunker.hierarchical_chunker import (
 from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
 from docling_core.types.doc.document import DocItem
+from transformers import AutoTokenizer
 
 class MDTableSerializerProvider(ChunkingSerializerProvider):
     def get_serializer(self, doc):
@@ -13,10 +14,17 @@ class MDTableSerializerProvider(ChunkingSerializerProvider):
             table_serializer=MarkdownTableSerializer(),
         )
 
-def get_chunker(embed_model):
+def get_chunker(tokenizer=None):
+    """
+    Chunker 생성. tokenizer가 없으면 기본 BGE-M3 tokenizer 로드
+    임베딩 서버와 분리되어 있어도 tokenizer만 로컬에 로드하면 됨
+    """
+    if tokenizer is None:
+        tokenizer = AutoTokenizer.from_pretrained('BAAI/bge-m3')
+    
     chunker = HybridChunker(
         max_tokens=1024,
-        tokenizer = embed_model.tokenizer,
+        tokenizer=tokenizer,
         serializer_provider=MDTableSerializerProvider()
     )
     return chunker

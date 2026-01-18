@@ -6,10 +6,36 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from classfier import PictureClassifierPipeline, PictureClassifierPipelineOptions
 from hierarchical.postprocessor import ResultPostprocessor
 from chunking import get_chunker, get_pages
-from embed import WnpEmbedModel
-from wnp_opensearch import WnpOpensearch
 from fastapi import FastAPI
 from httpx import AsyncClient
+from celery import Celery
+
+app = Celery('docling', broker='amqp://guest:guest@rabbitmq:5672//')
+@app.task
+def docling_task():
+    logging.basicConfig(level=logging.INFO)
+    pipeline_options = PictureClassifierPipelineOptions()
+    pipeline_options.images_scale = 2.0
+    pipeline_options.generate_picture_images = True
+    pipeline_options.do_table_structure = True
+    pipeline_options.table_structure_options.do_cell_matching = True
+    pipeline_options.do_ocr = True
+    pipeline_options.generate_table_images = True
+    doc_converter = DocumentConverter(
+        allowed_formats=[
+            InputFormat.PDF,
+            InputFormat.DOCX,
+            InputFormat.HTML,
+            InputFormat.MD,
+            InputFormat.ASCIIDOC,
+        ],
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_cls=PictureClassifierPipeline,
+                pipeline_options=pipeline_options,
+            )
+        }
+    )
 
 app_service = {}
 
@@ -66,6 +92,7 @@ async def main():
     # ResultPostprocessor는 PDF 전용 - MD/TXT는 건너뛰기
     if file_path.endswith('.pdf'):
         ResultPostprocessor(result).process()
+    # tokenizer만 필요하므로 get_chunker()가 자동으로 로드
     chunker = get_chunker()
     chunk_iter = chunker.chunk(dl_doc=result.document)
 

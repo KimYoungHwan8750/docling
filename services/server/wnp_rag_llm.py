@@ -1,15 +1,53 @@
 import requests
 import json
-from wnp_opensearch import WnpOpensearch
-from embed import WnpEmbedModel
-from wnp_reranker import WnpReranker
+
+# 오픈서치
+# Celery
+# gRPC
+import grpc
+from celery import Celery
+from ..protos import bge_embed_pb2_grpc, bge_rerank_pb2_grpc
+from ..protos import bge_embed_pb2, bge_rerank_pb2
+
+def get_embed_client(server_address='localhost:50055'):
+    """gRPC 임베딩 서비스 클라이언트 생성"""
+    channel = grpc.insecure_channel(server_address)
+    return bge_embed_pb2_grpc.BgeEmbedStub(channel)
+
+def embed_via_grpc(sentences: list[str], client=None) -> tuple[list[float], dict]:
+    if client is None:
+        client = get_embed_client()
+    
+    request = bge_embed_pb2.EmbedRequest(texts=sentences)
+    response = client.Embed(request)
+    
+    if len(response.vectors) == 0:
+        return None, None
+    
+    vector_data = response.vectors[0]
+    dense = list(vector_data.dense)
+    
+    sparse = {str(k): float(v) for k, v in vector_data.sparse.items()}
+    return dense, sparse
+
+def get_rerank_client(server_address='localhost:50056'):
+    channel = grpc.insecure_channel(server_address)
+    return bge_rerank_pb2_grpc.BgeRerankStub(channel)
+
+def rerank_via_grpc(query: str, documents: list[str], client=None) -> list[float]:
+    if client is None:
+        client = get_rerank_client()
+    
+    request = bge_rerank_pb2.RerankRequest(query=query, documents=documents)
+    response = client.Rerank(request)
+    return response.scores
 
 VLLM_URL = "http://localhost:8000/v1/chat/completions"
 
 def generate_answer(query):
     print(f"질문 분석 중: {query}")
     
-    dense_vec, sparse_vec = WnpEmbedModel.embed([query])
+    dense_vec, sparse_vec = embed_via_grpc([query])
     threshold = 0.1
     max_top_k = 30
 
@@ -42,18 +80,14 @@ def generate_answer(query):
         }
     }
     
-    search_res = WnpOpensearch.get_client().search(
-        index="rag_data",
-        body=search_query,
-        params={"search_pipeline": "hybrid_search_pipeline2"}
-    )
-    
-    hits = search_res['hits']['hits']
+    response = requests.post("http://localhost:50057/docs", json=search_query)
+    print(response)
+    hits = response.json()
     if not hits:
         return "검색된 결과가 없습니다."
 
     contents = [hit['_source']['content'] for hit in hits]
-    rerank_scores = WnpReranker.rerank(query, contents)
+    rerank_scores = rerank_via_grpc(query, contents)
     
     context_list = []
     if rerank_scores:

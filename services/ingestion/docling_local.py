@@ -2,6 +2,7 @@ import logging
 
 from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
+import requests
 from .classfier import PictureClassifierPipeline, PictureClassifierPipelineOptions
 from hierarchical.postprocessor import ResultPostprocessor
 from .chunking import get_chunker, get_pages
@@ -32,17 +33,6 @@ def embed_via_grpc(sentences: list[str], client=None) -> tuple[list[float], dict
     sparse = {str(k): float(v) for k, v in vector_data.sparse.items()}
     return dense, sparse
 
-def test_code():
-    embed_client = get_embed_client()
-    dense, sparse = embed_via_grpc(["Hello, world!"], embed_client)
-    print("Dense:", dense)
-    print("Sparse:", sparse)
-
-    rerank_client = get_rerank_client()
-    rerank_scores = rerank_via_grpc("반갑다", ["반갑지 않다."], rerank_client)
-    print("Rerank scores:", rerank_scores)
-
-
 def get_rerank_client(server_address='localhost:50056'):
     channel = grpc.insecure_channel(server_address)
     return bge_rerank_pb2_grpc.BgeRerankStub(channel)
@@ -55,74 +45,91 @@ def rerank_via_grpc(query: str, documents: list[str], client=None) -> list[float
     response = client.Rerank(request)
     return response.scores
 
+def test_code():
+    embed_client = get_embed_client()
+    dense, sparse = embed_via_grpc(["나 밥 먹었어"], embed_client)
+    print("Dense:", dense)
+    print("Sparse:", sparse)
 
-# def main():
-#     logging.basicConfig(level=logging.INFO)
-#     pipeline_options = PictureClassifierPipelineOptions()
-#     pipeline_options.images_scale = 2.0
-#     pipeline_options.generate_picture_images = True
-#     pipeline_options.do_table_structure = True
-#     pipeline_options.table_structure_options.do_cell_matching = True
-#     pipeline_options.do_ocr = True
-#     pipeline_options.generate_table_images = True
-#     doc_converter = DocumentConverter(
-#         allowed_formats=[
-#             InputFormat.PDF,
-#             InputFormat.DOCX,
-#             InputFormat.HTML,
-#             InputFormat.MD,
-#             InputFormat.ASCIIDOC,
-#             InputFormat.IMAGE
-#         ],
-#         format_options={
-#             InputFormat.PDF: PdfFormatOption(
-#                 pipeline_cls=PictureClassifierPipeline,
-#                 pipeline_options=pipeline_options,
-#             )
-#         }
-#     )
-#     # TXT 파일을 MD로 처리
-#     file_path = "/home/kyh/docling/complex_doc.pdf"
+    rerank_client = get_rerank_client()
+    rerank_scores = rerank_via_grpc("반갑다", ["반갑지 않다.", "메롱이다", "오랜만이다", "반갑다"], rerank_client)
+    print("Rerank scores:", rerank_scores)
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+    pipeline_options = PictureClassifierPipelineOptions()
+    pipeline_options.images_scale = 2.0
+    pipeline_options.generate_picture_images = True
+    pipeline_options.do_table_structure = True
+    pipeline_options.table_structure_options.do_cell_matching = True
+    pipeline_options.do_ocr = True
+    pipeline_options.generate_table_images = True
+    doc_converter = DocumentConverter(
+        allowed_formats=[
+            InputFormat.PDF,
+            InputFormat.DOCX,
+            InputFormat.HTML,
+            InputFormat.MD,
+            InputFormat.ASCIIDOC,
+            InputFormat.IMAGE
+        ],
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_cls=PictureClassifierPipeline,
+                pipeline_options=pipeline_options,
+            )
+        }
+    )
+    # TXT 파일을 MD로 처리
+    file_path = "/home/kyh/docling/complex_doc.pdf"
     
-#     # 확장자만 .md로 변경해서 임시 파일 생성
-#     if file_path.endswith('.txt'):
-#         import shutil
-#         md_file = file_path.replace('.txt', '.md')
-#         shutil.copy(file_path, md_file)
-#         print(f"📝 TXT -> MD 변환: {file_path} → {md_file}")
-#         file_path = md_file
+    # 확장자만 .md로 변경해서 임시 파일 생성
+    if file_path.endswith('.txt'):
+        import shutil
+        md_file = file_path.replace('.txt', '.md')
+        shutil.copy(file_path, md_file)
+        print(f"📝 TXT -> MD 변환: {file_path} → {md_file}")
+        file_path = md_file
     
-#     result = doc_converter.convert(
-#         file_path,
-#         page_range=(1,1)
-#     )
+    result = doc_converter.convert(
+        file_path,
+        page_range=(1,1)
+    )
 
-#     # ResultPostprocessor는 PDF 전용 - MD/TXT는 건너뛰기
-#     if file_path.endswith('.pdf'):
-#         ResultPostprocessor(result).process()
-#     chunker = get_chunker(WnpEmbedModel.getModel())
-#     chunk_iter = chunker.chunk(dl_doc=result.document)
+    # ResultPostprocessor는 PDF 전용 - MD/TXT는 건너뛰기
+    if file_path.endswith('.pdf'):
+        ResultPostprocessor(result).process()
+    
+    # 임베딩은 gRPC 서버 사용, chunker는 tokenizer만 필요
+    chunker = get_chunker()  # tokenizer 자동 로드
+    chunk_iter = chunker.chunk(dl_doc=result.document)
+    
+    # gRPC 클라이언트 생성
+    embed_client = get_embed_client()
 
-#     for i, chunk in enumerate(chunk_iter):
-#         headings = "No Title" if chunk.meta.headings is None else " > ".join(chunk.meta.headings)
-#         content_prefix = f"[{chunk.meta.origin.filename}, {headings}]"
-#         content = f"{content_prefix} {chunk.text}"
-#         dense, sparse = WnpEmbedModel.embed([content])
-#         if(dense is None or sparse is None):
-#             print("임베딩 실패")
-#             continue
-#         pages = list(get_pages(chunk.meta))
-#         print(chunk.text)
-#         data = {
-#             "content": content,
-#             "content_dense": dense,    # content_vector.dense 아님!
-#             "content_sparse": sparse,
-#             "meta": {
-#                 "headings": chunk.meta.headings,
-#                 "pages": pages,
-#             }
-#         }
-        # WnpOpensearch.put_rag_data(data)
+    for i, chunk in enumerate(chunk_iter):
+        headings = "No Title" if chunk.meta.headings is None else " > ".join(chunk.meta.headings)
+        content_prefix = f"[{chunk.meta.origin.filename}, {headings}]"
+        content = f"{content_prefix} {chunk.text}"
+        
+        # gRPC로 임베딩 요청
+        dense, sparse = embed_via_grpc([content], embed_client)
+        if dense is None or sparse is None:
+            print("임베딩 실패")
+            continue
+            
+        pages = list(get_pages(chunk.meta))
+        print(chunk.text)
+        data = {
+            "content": content,
+            "content_dense": dense,
+            "content_sparse": sparse,
+            "meta": {
+                "headings": chunk.meta.headings,
+                "pages": pages,
+            }
+        }
+        requests.put("http://localhost:50057/docs", json=data)
         # if hasattr(chunk, 'headings')
         # print(f"Chunk {i}: {content}")    
     # for i, (item, level) in enumerate(result.document.iterate_items()):
@@ -158,3 +165,4 @@ def rerank_via_grpc(query: str, documents: list[str], client=None) -> list[float
 
 if __name__ == "__main__":
     test_code()
+    # main()

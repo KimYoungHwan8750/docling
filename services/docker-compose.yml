@@ -1,13 +1,30 @@
 services:
-  embedding-server:
-    build:
-      context: .
-      dockerfile: ./bge/Dockerfile-embed
-    ports:
-    - "50055:50055"
-  rerank-server:
-    build:
-      context: .
-      dockerfile: ./bge/Dockerfile-rerank
-    ports:
-    - "50056:50056"
+    embedding-server:
+      build:
+        context: .
+        dockerfile: ./bge/Dockerfile-embed
+        ports:
+          - "50055:50055"
+    rerank-server:
+      build:
+        context: .
+        dockerfile: ./bge/Dockerfile-rerank
+        ports:
+          - "50056:50056"
+    rabbit-mq-server:
+        image: rabbitmq:4.2.2-management
+        port:
+          - "5672:5672"
+        hostname: rabbitmq
+    opensearch-server:
+      build:
+        context: .
+        dockerfile: ./retrieval/Dockerfile
+        ports:
+          - "50057:50057"
+    backend-server:
+      build:
+        context: .
+        dockerfile: ./server/Dockerfile
+        ports:
+          - "50058:50058"
