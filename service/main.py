@@ -8,7 +8,7 @@ from opensearchpy import OpenSearch
 from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-from models import (
+from .models import (
     EmbedRequest, EmbedResponse,
     RerankRequest, RerankResponse,
     RAGRequest, RAGResponse,
@@ -18,12 +18,12 @@ from models import (
     IndexRequest, IndexResponse,
     AskRequest, AskResponse
 )
-from services.embed_service import EmbedService
-from services.reranker_service import RerankerService
-from services.opensearch_service import OpensearchService
-from services.chunking_service import ChunkingService
-from services.classifier_service import ClassifierService, PictureClassifierPipelineOptions
-from services.rag_service import RAGService
+from .services.embed_service import EmbedService
+from .services.reranker_service import RerankerService
+from .services.opensearch_service import OpensearchService
+from .services.chunking_service import ChunkingService
+from .services.classifier_service import ClassifierService, PictureClassifierPipelineOptions
+from .services.rag_service import RAGService
 from fastapi.middleware.cors import CORSMiddleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
