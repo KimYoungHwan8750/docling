@@ -190,7 +190,7 @@ async def stream(
             raise HTTPException(status_code=400, detail="질문이 비어있습니다.")
         
         # RAG 서비스로 스트리밍 생성
-        rag_service = app_state['rag_service']
+        rag_service: RAGService = app_state['rag_service']
         
         async def event_generator():
             try:

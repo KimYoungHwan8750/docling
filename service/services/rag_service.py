@@ -3,14 +3,18 @@ import json
 import httpx
 from typing import Dict, Any, Tuple, AsyncGenerator
 
+from service.services.embed_service import EmbedService
+from service.services.opensearch_service import OpensearchService
+from service.services.reranker_service import RerankerService
+
 
 class RAGService:
     """RAG (Retrieval-Augmented Generation) 서비스"""
     
     def __init__(self, embed_service, reranker_service, opensearch_service, vllm_url: str):
-        self.embed_service = embed_service
-        self.reranker_service = reranker_service
-        self.opensearch_service = opensearch_service
+        self.embed_service: EmbedService = embed_service
+        self.reranker_service: RerankerService = reranker_service
+        self.opensearch_service: OpensearchService = opensearch_service
         self.vllm_url = vllm_url
     
     async def generate_answer_stream(self, query: str) -> AsyncGenerator[str, None]:
