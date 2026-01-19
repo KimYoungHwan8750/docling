@@ -1,5 +1,6 @@
 import requests
 import json
+from opensearchpy import OpenSearch
 
 # 오픈서치
 # Celery
@@ -47,6 +48,16 @@ VLLM_URL = "http://localhost:8000/v1/chat/completions"
 def generate_answer(query):
     print(f"질문 분석 중: {query}")
     
+    # OpenSearch 클라이언트 생성
+    opensearch_client = OpenSearch(
+        hosts=[{'host': 'localhost', 'port': 9200}],
+        http_compress=True,
+        use_ssl=False,
+        verify_certs=False,
+        ssl_assert_hostname=False,
+        ssl_show_warn=False
+    )
+    
     dense_vec, sparse_vec = embed_via_grpc([query])
     threshold = 0.1
     max_top_k = 30
@@ -80,9 +91,12 @@ def generate_answer(query):
         }
     }
     
-    response = requests.post("http://localhost:50057/docs", json=search_query)
+    response = opensearch_client.search(
+        index="rag_data",
+        body=search_query
+    )
     print(response)
-    hits = response.json()
+    hits = response.get('hits', {}).get('hits', [])
     if not hits:
         return "검색된 결과가 없습니다."
 

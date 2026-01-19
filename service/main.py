@@ -3,12 +3,20 @@ import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from FlagEmbedding import BGEM3FlagModel, FlagReranker
 from opensearchpy import OpenSearch
 from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
+import grpc
+import sys
+import os
+from transformers import AutoTokenizer
 
-from models import (
+# protos 폴더를 import 경로에 추가
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'services'))
+from protos import bge_embed_pb2_grpc, bge_rerank_pb2_grpc
+from protos import bge_embed_pb2, bge_rerank_pb2
+
+from .models import (
     EmbedRequest, EmbedResponse,
     RerankRequest, RerankResponse,
     RAGRequest, RAGResponse,
@@ -18,12 +26,12 @@ from models import (
     IndexRequest, IndexResponse,
     AskRequest, AskResponse
 )
-from services.embed_service import EmbedService
-from services.reranker_service import RerankerService
-from services.opensearch_service import OpensearchService
-from services.chunking_service import ChunkingService
-from services.classifier_service import ClassifierService, PictureClassifierPipelineOptions
-from services.rag_service import RAGService
+from .services.embed_service import EmbedService
+from .services.reranker_service import RerankerService
+from .services.opensearch_service import OpensearchService
+from .services.chunking_service import ChunkingService
+from .services.classifier_service import ClassifierService, PictureClassifierPipelineOptions
+from .services.rag_service import RAGService
 from fastapi.middleware.cors import CORSMiddleware
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,24 +40,85 @@ logger = logging.getLogger(__name__)
 app_state = {}
 
 
+# gRPC 클라이언트 함수들 - 채널 재사용을 위해 채널과 클라이언트를 함께 반환
+def create_embed_client(server_address='localhost:50055'):
+    """gRPC 임베딩 서비스 클라이언트 및 채널 생성"""
+    channel = grpc.insecure_channel(server_address)
+    stub = bge_embed_pb2_grpc.BgeEmbedStub(channel)
+    return channel, stub
+
+def create_rerank_client(server_address='localhost:50056'):
+    """gRPC 리랭커 서비스 클라이언트 및 채널 생성"""
+    channel = grpc.insecure_channel(server_address)
+    stub = bge_rerank_pb2_grpc.BgeRerankStub(channel)
+    return channel, stub
+
+
+# gRPC 클라이언트를 래핑한 서비스 클래스들
+class GrpcEmbedService:
+    """gRPC 임베딩 서비스 (채널 재사용)"""
+    def __init__(self, client):
+        self.client = client  # 재사용 가능한 gRPC stub
+    
+    def embed(self, sentences: list[str]):
+        """여러 문장을 배치로 임베딩"""
+        if not sentences:
+            return [], []
+        
+        # 배치 임베딩 - 한 번의 gRPC 호출로 처리
+        request = bge_embed_pb2.EmbedRequest(texts=sentences)
+        response = self.client.Embed(request)
+        
+        if len(response.vectors) == 0:
+            return [], []
+        
+        dense_vecs = [list(vec.dense) for vec in response.vectors]
+        sparse_vecs = [{str(k): float(v) for k, v in vec.sparse.items()} for vec in response.vectors]
+        
+        return dense_vecs, sparse_vecs
+    
+    def embed_single(self, sentence: str):
+        """단일 문장 임베딩 (내부적으로 배치 API 사용)"""
+        dense_vecs, sparse_vecs = self.embed([sentence])
+        return dense_vecs[0] if dense_vecs else [], sparse_vecs[0] if sparse_vecs else {}
+
+
+class GrpcRerankerService:
+    """gRPC 리랭커 서비스"""
+    def __init__(self, client):
+        self.client = client
+    
+    def rerank(self, query: str, documents: list[str]):
+        """문서들을 배치로 리랭킹 (한 번에 모든 문서 처리)"""
+        if not documents:
+            return []
+        
+        # 모든 문서를 한 번의 gRPC 호출로 배치 처리 (성능 최적화)
+        request = bge_rerank_pb2.RerankRequest(query=query, documents=documents)
+        response = self.client.Rerank(request)
+        return list(response.scores)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 시 실행되는 lifespan 이벤트"""
     logger.info("🚀 서비스 초기화 중...")
     
-    # 1. 임베딩 모델 로드
-    logger.info("📦 임베딩 모델 로딩 중... (BAAI/bge-m3)")
-    embed_model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True)
-    app_state['embed_model'] = embed_model
-    app_state['embed_service'] = EmbedService(embed_model)
-    logger.info("✅ 임베딩 모델 로드 완료")
+    # 1. 임베딩 gRPC 채널 및 클라이언트 생성 (재사용)
+    logger.info("📦 임베딩 gRPC 클라이언트 연결 중... (localhost:50055)")
+    embed_channel, embed_client = create_embed_client('localhost:50055')
+    app_state['embed_channel'] = embed_channel  # 채널 저장 (GC 방지 및 재사용)
+    app_state['embed_client'] = embed_client
+    app_state['embed_service'] = GrpcEmbedService(embed_client)
+    logger.info("✅ 임베딩 gRPC 클라이언트 연결 완료")
     
-    # 2. 리랭커 모델 로드
-    logger.info("📦 리랭커 모델 로딩 중... (BAAI/bge-reranker-v2-m3)")
-    reranker_model = FlagReranker('BAAI/bge-reranker-v2-m3', use_fp16=True)
-    app_state['reranker_model'] = reranker_model
-    app_state['reranker_service'] = RerankerService(reranker_model)
-    logger.info("✅ 리랭커 모델 로드 완료")
+    # 2. 리랭커 gRPC 채널 및 클라이언트 생성 (재사용)
+    logger.info("📦 리랭커 gRPC 클라이언트 연결 중... (localhost:50056)")
+    rerank_channel, rerank_client = create_rerank_client('localhost:50056')
+    app_state['rerank_channel'] = rerank_channel  # 채널 저장 (GC 방지 및 재사용)
+    app_state['rerank_client'] = rerank_client
+    app_state['reranker_service'] = GrpcRerankerService(rerank_client)
+    logger.info("✅ 리랭커 gRPC 클라이언트 연결 완료")
     
     # 3. OpenSearch 클라이언트
     logger.info("📦 OpenSearch 클라이언트 초기화 중...")
@@ -74,8 +143,15 @@ async def lifespan(app: FastAPI):
     app_state['classifier_service'] = ClassifierService(doc_converter)
     logger.info("✅ Docling DocumentConverter 초기화 완료")
     
-    # 5. 청킹 서비스
-    app_state['chunking_service'] = ChunkingService(embed_model)
+    # 5. 청킹 서비스 (tokenizer만 로드)
+    logger.info("📦 Tokenizer 로딩 중... (BAAI/bge-m3)")
+    tokenizer = AutoTokenizer.from_pretrained('BAAI/bge-m3')
+    # ChunkingService가 embed_model.tokenizer를 사용하므로 mock 객체 생성
+    class TokenizerWrapper:
+        def __init__(self, tokenizer):
+            self.tokenizer = tokenizer
+    tokenizer_wrapper = TokenizerWrapper(tokenizer)
+    app_state['chunking_service'] = ChunkingService(tokenizer_wrapper)
     logger.info("✅ 청킹 서비스 초기화 완료")
     
     # 6. RAG 서비스
@@ -94,6 +170,16 @@ async def lifespan(app: FastAPI):
     
     # 종료 시 정리
     logger.info("🛑 서비스 종료 중...")
+    
+    # gRPC 채널 닫기
+    if 'embed_channel' in app_state:
+        logger.info("📡 임베딩 gRPC 채널 닫는 중...")
+        app_state['embed_channel'].close()
+    
+    if 'rerank_channel' in app_state:
+        logger.info("📡 리랭커 gRPC 채널 닫는 중...")
+        app_state['rerank_channel'].close()
+    
     app_state.clear()
     logger.info("✅ 서비스 종료 완료")
 
@@ -367,8 +453,8 @@ async def health_check():
     return {
         "status": "healthy",
         "services": {
-            "embed_model": "embed_model" in app_state,
-            "reranker_model": "reranker_model" in app_state,
+            "embed_grpc_client": "embed_client" in app_state,
+            "rerank_grpc_client": "rerank_client" in app_state,
             "opensearch": "opensearch_client" in app_state,
             "doc_converter": "doc_converter" in app_state,
         }

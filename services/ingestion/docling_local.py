@@ -2,7 +2,7 @@ import logging
 
 from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
-import requests
+from opensearchpy import OpenSearch
 from .classfier import PictureClassifierPipeline, PictureClassifierPipelineOptions
 from hierarchical.postprocessor import ResultPostprocessor
 from .chunking import get_chunker, get_pages
@@ -106,6 +106,16 @@ def main():
     
     # gRPC 클라이언트 생성
     embed_client = get_embed_client()
+    
+    # OpenSearch 클라이언트 생성
+    opensearch_client = OpenSearch(
+        hosts=[{'host': 'localhost', 'port': 9200}],
+        http_compress=True,
+        use_ssl=False,
+        verify_certs=False,
+        ssl_assert_hostname=False,
+        ssl_show_warn=False
+    )
 
     for i, chunk in enumerate(chunk_iter):
         headings = "No Title" if chunk.meta.headings is None else " > ".join(chunk.meta.headings)
@@ -129,7 +139,11 @@ def main():
                 "pages": pages,
             }
         }
-        requests.put("http://localhost:50057/docs", json=data)
+        opensearch_client.index(
+            index="rag_data",
+            body=data,
+            refresh=True
+        )
         # if hasattr(chunk, 'headings')
         # print(f"Chunk {i}: {content}")    
     # for i, (item, level) in enumerate(result.document.iterate_items()):
